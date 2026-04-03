@@ -7,7 +7,10 @@
       "Bash(gh repo:*)",
       "Bash(npm list:*)",
       "Bash(npx gh:*)",
-      "Bash(npx vercel:*)"
+      "Bash(npx vercel:*)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(python scripts/office/unpack.py \"C:/Users/vlwhi/Tech_Resume/Tech_Resume_KartikKhanna.docx\" \"C:/Users/vlwhi/Tech_Resume/unpacked/\")"
     ]
   }
 }

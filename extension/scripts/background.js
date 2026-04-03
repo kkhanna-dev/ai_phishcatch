@@ -1,4 +1,5 @@
-const API_URL = "https://phishcatch-ginz.vercel.app";
+// Update this to your deployed Cloudflare Worker URL after running `wrangler deploy`
+const API_URL = "https://cf-ai-phishcatch.YOUR_SUBDOMAIN.workers.dev";
 
 // Listen for messages from content script and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

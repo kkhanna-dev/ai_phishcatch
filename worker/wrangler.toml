@@ -1,0 +1,24 @@
+name = "cf-ai-phishcatch"
+main = "src/index.ts"
+compatibility_date = "2024-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+[ai]
+binding = "AI"
+
+[[kv_namespaces]]
+binding = "SCAN_CACHE"
+id = "REPLACE_WITH_YOUR_KV_ID"
+preview_id = "REPLACE_WITH_YOUR_KV_PREVIEW_ID"
+
+[durable_objects]
+bindings = [
+  { name = "SCAN_HISTORY", class_name = "ScanHistory" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["ScanHistory"]
+
+[vars]
+ENVIRONMENT = "production"
