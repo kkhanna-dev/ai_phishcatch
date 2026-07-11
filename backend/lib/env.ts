@@ -6,9 +6,8 @@
 import { z } from "zod";
 
 const envSchema = z.object({
-  ANTHROPIC_API_KEY: z.string().min(1, "ANTHROPIC_API_KEY is required"),
   ALLOWED_ORIGINS: z.string().optional(),
-  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   NODE_ENV: z.string().optional(),
 });

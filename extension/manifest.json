@@ -1,12 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "PhishCatch — AI Email Phishing Detector",
-  "version": "1.0.0",
-  "description": "AI-powered email phishing detection. Automatically scans your emails and reports a phishing risk score.",
-  "permissions": ["activeTab", "storage", "scripting"],
-  "host_permissions": ["https://mail.google.com/*"],
+  "name": "PhishCatch — Local Email Phishing Detector",
+  "version": "2.0.0",
+  "description": "Instant, on-device email phishing detection — no AI, no cloud, no per-email cost. Automatically monitors your Gmail inbox in the background and flags dangerous emails — no clicking required.",
+  "permissions": ["activeTab", "storage", "scripting", "alarms", "identity"],
+  "host_permissions": ["https://mail.google.com/*", "https://gmail.googleapis.com/*"],
+  "oauth2": {
+    "client_id": "510948440294-o7qp1g0j97asp2pci00iteq3lf987nu5.apps.googleusercontent.com",
+    "scopes": ["https://www.googleapis.com/auth/gmail.modify"]
+  },
   "content_security_policy": {
-    "extension_pages": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src https: http://localhost:* http://127.0.0.1:*; object-src 'none'"
+    "extension_pages": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src https://gmail.googleapis.com https://www.googleapis.com https://accounts.google.com; object-src 'none'"
   },
   "action": {
     "default_popup": "popup.html",

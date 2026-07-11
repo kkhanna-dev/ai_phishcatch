@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
-import Anthropic from "@anthropic-ai/sdk";
 import { buildCorsHeaders } from "../../../lib/cors";
 import { checkRateLimit, getClientKey } from "../../../lib/rateLimit";
 import { sanitizeEmailInput } from "../../../lib/sanitize";
 import { EmailInputSchema } from "../../../lib/schema";
-import { analyzeEmailWithClaude } from "../../../lib/anthropicClient";
+import { analyzeEmailHeuristically } from "../../../lib/heuristicEngine";
 
 export const runtime = "nodejs";
 
@@ -58,20 +57,14 @@ export async function POST(request: NextRequest) {
   }
 
   // --- Analyze ----------------------------------------------------------
+  // Fully local rule-based scoring — no external API calls, no per-email
+  // cost, no network dependency, and it can never time out or get
+  // rate-limited upstream because there is no upstream.
   try {
-    const analysis = await analyzeEmailWithClaude(input);
+    const analysis = analyzeEmailHeuristically(input);
     return NextResponse.json(analysis, { headers: buildCorsHeaders(origin) });
   } catch (error) {
     console.error("Analysis error:", error instanceof Error ? error.message : error);
-
-    if (error instanceof Anthropic.APIError && error.status === 401) {
-      // Never leak whether/why the upstream key is invalid to the client.
-      return jsonError(502, "Analysis service is temporarily unavailable", origin);
-    }
-    if (error instanceof DOMException && error.name === "AbortError") {
-      return jsonError(504, "Analysis timed out. Please try again.", origin);
-    }
-
-    return jsonError(502, "Failed to analyze email. Please try again in a moment.", origin);
+    return jsonError(500, "Failed to analyze email. Please try again in a moment.", origin);
   }
 }

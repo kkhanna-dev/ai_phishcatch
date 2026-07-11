@@ -104,6 +104,109 @@ body::-webkit-scrollbar-thumb {
   border-color: var(--primary);
 }
 
+/* Gmail Auto-Protection Monitor Card */
+.monitor-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.monitor-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.monitor-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #94a3b8;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15);
+  transition: all 0.2s;
+}
+
+.monitor-dot.on {
+  background: var(--safe);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+.monitor-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.monitor-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.monitor-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.monitor-connect-btn {
+  padding: 10px;
+  font-size: 13px;
+  box-shadow: none;
+}
+
+.monitor-view-btn {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.monitor-view-btn:hover {
+  background: var(--primary-light);
+}
+
+.secondary-scan-btn {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+.secondary-scan-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: none;
+  box-shadow: none;
+}
+
+.catchup-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.catchup-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.catchup-fill {
+  height: 100%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  width: 0%;
+  transition: width 0.3s;
+}
+
+.catchup-text {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
 /* Status Card */
 .status-card {
   background: var(--surface);

@@ -26,7 +26,7 @@
         </div>
         <div>
           <h1 class="header-title">PhishCatch</h1>
-          <p class="header-subtitle">AI Phishing Detector</p>
+          <p class="header-subtitle">Local Phishing Detector</p>
         </div>
       </div>
       <button id="settingsBtn" class="icon-btn" title="Settings">
@@ -35,6 +35,23 @@
         </svg>
       </button>
     </header>
+
+    <!-- Gmail Auto-Protection -->
+    <div class="monitor-card" id="monitorCard">
+      <div class="monitor-card-top">
+        <span class="monitor-dot" id="monitorDot"></span>
+        <div class="monitor-info">
+          <div class="monitor-title" id="monitorTitle">Gmail Auto-Protection: Off</div>
+          <div class="monitor-desc" id="monitorDesc">Connect once — PhishCatch will silently scan every email from then on.</div>
+        </div>
+      </div>
+      <div class="catchup-progress" id="catchupProgress" style="display:none;">
+        <div class="catchup-bar"><div class="catchup-fill" id="catchupFill"></div></div>
+        <div class="catchup-text" id="catchupText">Scanning inbox…</div>
+      </div>
+      <button id="connectGmailBtn" class="scan-btn monitor-connect-btn">Connect Gmail</button>
+      <button id="viewFlaggedBtn" class="clear-btn monitor-view-btn" style="display:none;">View Flagged Emails</button>
+    </div>
 
     <!-- Status Card -->
     <div class="status-card" id="statusCard">
@@ -49,8 +66,8 @@
       </div>
     </div>
 
-    <!-- Quick Scan Button -->
-    <button class="scan-btn" id="scanBtn">
+    <!-- Quick Scan Button (manual, optional — auto-protection above needs no clicks) -->
+    <button class="scan-btn secondary-scan-btn" id="scanBtn">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
       </svg>
@@ -102,10 +119,8 @@
         </button>
       </div>
 
-      <label class="setting-label" for="apiUrlInput">API Endpoint</label>
-      <input id="apiUrlInput" class="setting-input" type="url" placeholder="https://your-phishcatch-app.vercel.app" />
-      <button id="saveSettings" class="save-btn">Save</button>
-      <div id="settingsSavedMsg" class="empty-hint" style="text-align:center;display:none;">Saved ✓</div>
+      <label class="setting-label" for="rateLimitInfo">Scanning</label>
+      <p class="empty-hint" id="rateLimitInfo">All scans run locally on-device with a rule-based engine — no AI, no external API calls, no per-email cost.</p>
 
       <button id="clearHistory" class="clear-btn">Clear Scan History</button>
     </div>

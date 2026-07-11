@@ -1,88 +1,84 @@
-// PhishCatch background service worker — talks to the PhishCatch API.
+// PhishCatch background service worker.
+//
+// Wires together:
+//   - heuristics.js: 100% local, rule-based phishing scoring engine (no
+//     network calls, no API costs, works offline)
+//   - gmail.js:      Gmail API client (auth, labels, message read/modify)
+//   - monitor.js:    autonomous inbox scanning engine (chrome.alarms driven)
+//
+// Manual scans (from the popup's "Scan Current Email" button or the Gmail
+// content script) run the exact same local analysis as the autonomous
+// monitor — there is no backend dependency for scanning at all.
+importScripts("heuristics.js", "gmail.js", "monitor.js");
 
-// Default API URL. Update after deploying the Next.js backend to Vercel,
-// or override at runtime via the extension's Settings panel (stored in
-// chrome.storage.local under "apiUrl").
-const DEFAULT_API_URL = "https://your-phishcatch-app.vercel.app";
-const REQUEST_TIMEOUT_MS = 25000;
+const MAX_HISTORY = 50;
 
-async function getApiUrl() {
+async function addToHistory(entry) {
   try {
-    const { apiUrl } = await chrome.storage.local.get(["apiUrl"]);
-    const trimmed = (apiUrl || "").trim().replace(/\/+$/, "");
-    return trimmed || DEFAULT_API_URL;
+    const stored = await chrome.storage.local.get(["scanHistory"]);
+    const history = stored.scanHistory || [];
+    history.unshift(entry);
+    await chrome.storage.local.set({ scanHistory: history.slice(0, MAX_HISTORY) });
   } catch {
-    return DEFAULT_API_URL;
+    // Non-fatal — the caller still has the analysis result.
   }
 }
+self.PhishCatchHistory = { addToHistory };
 
-// Listen for messages from content script and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "ANALYZE_EMAIL") {
-    analyzeEmail(message.data)
+    handleManualAnalyze(message.data)
       .then(sendResponse)
       .catch((err) => sendResponse({ error: err.message }));
-    return true; // Keep channel open for async response
+    return true; // Keep the message channel open for the async response.
   }
 
   if (message.type === "GET_SCAN_HISTORY") {
-    chrome.storage.local.get(["scanHistory"], (result) => {
-      sendResponse(result.scanHistory || []);
-    });
+    chrome.storage.local.get(["scanHistory"], (result) => sendResponse(result.scanHistory || []));
+    return true;
+  }
+
+  if (message.type === "CONNECT_GMAIL") {
+    self.PhishCatchMonitor.connect()
+      .then(sendResponse)
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
+  if (message.type === "DISCONNECT_GMAIL") {
+    self.PhishCatchMonitor.disconnect()
+      .then(sendResponse)
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
+  if (message.type === "GET_MONITOR_STATUS") {
+    self.PhishCatchMonitor.getStatus().then(sendResponse);
     return true;
   }
 });
 
-async function analyzeEmail(emailData) {
-  const apiUrl = await getApiUrl();
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-  let response;
-  try {
-    response = await fetch(`${apiUrl}/api/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(emailData),
-      signal: controller.signal,
-    });
-  } catch (err) {
-    if (err.name === "AbortError") {
-      throw new Error("Analysis timed out. Please try again.");
-    }
-    throw new Error(
-      "Could not reach the PhishCatch API. Check your connection or the API URL in Settings."
-    );
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || `API error: ${response.status}`);
-  }
-
-  const result = await response.json();
-
-  // Save to history
-  const historyEntry = {
+async function handleManualAnalyze(emailData) {
+  const result = self.PhishCatchHeuristics.analyze(emailData);
+  await addToHistory({
     ...result,
     subject: emailData.subject,
     sender: emailData.sender,
     timestamp: Date.now(),
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-  };
-
-  try {
-    const stored = await chrome.storage.local.get(["scanHistory"]);
-    const history = stored.scanHistory || [];
-    history.unshift(historyEntry);
-    // Keep last 50 scans
-    await chrome.storage.local.set({ scanHistory: history.slice(0, 50) });
-  } catch {
-    // Non-fatal — the scan result itself still gets returned to the caller.
-  }
-
+    source: "manual",
+  });
   return result;
 }
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === self.PhishCatchMonitor.POLL_ALARM_NAME) {
+    self.PhishCatchMonitor.runPollCycle().catch((err) => console.error("PhishCatch poll error:", err.message));
+  }
+});
+
+// If the browser restarts or the (non-persistent) service worker wakes up
+// after having been connected previously, resume monitoring automatically —
+// no user action needed beyond the original one-time connect.
+chrome.runtime.onStartup.addListener(() => self.PhishCatchMonitor.resumeIfConnected());
+chrome.runtime.onInstalled.addListener(() => self.PhishCatchMonitor.resumeIfConnected());

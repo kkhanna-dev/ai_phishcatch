@@ -16,6 +16,7 @@ export const EmailInputSchema = z
 export type EmailInput = z.infer<typeof EmailInputSchema>;
 
 export const SeveritySchema = z.enum(["low", "medium", "high"]);
+export type Severity = z.infer<typeof SeveritySchema>;
 export const VerdictSchema = z.enum(["SAFE", "SUSPICIOUS", "DANGEROUS"]);
 
 /** Shape the LLM response must conform to. Anything else is rejected. */

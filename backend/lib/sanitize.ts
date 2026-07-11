@@ -28,6 +28,28 @@ export function sanitizeText(input: unknown, maxLen: number): string {
   return stripControlChars(stripHtml(input)).trim().slice(0, maxLen);
 }
 
+/**
+ * Sanitizes a "From" header value like `Display Name <user@example.com>` or
+ * a bare `user@example.com`. The generic stripHtml() above treats any
+ * `<...>` as an HTML tag and deletes it — which would silently destroy the
+ * bracketed email address (and with it, the sender's domain, which most
+ * phishing heuristics depend on). This preserves a trailing `<...@...>`
+ * address while still stripping HTML from the display-name portion.
+ */
+export function sanitizeSender(input: unknown, maxLen: number): string {
+  if (typeof input !== "string") return "";
+  const raw = stripControlChars(input).trim().slice(0, maxLen);
+
+  const match = raw.match(/^(.*)<([^<>]*@[^<>]*)>\s*$/);
+  if (match) {
+    const displayName = stripHtml(match[1]).trim();
+    const email = match[2].trim();
+    return (displayName ? `${displayName} <${email}>` : email).slice(0, maxLen);
+  }
+
+  return sanitizeText(raw, maxLen);
+}
+
 export function sanitizeEmailInput(raw: {
   subject?: unknown;
   sender?: unknown;
@@ -43,7 +65,7 @@ export function sanitizeEmailInput(raw: {
 
   return {
     subject: sanitizeText(raw.subject, MAX_SUBJECT_LEN),
-    sender: sanitizeText(raw.sender, MAX_SENDER_LEN),
+    sender: sanitizeSender(raw.sender, MAX_SENDER_LEN),
     body: sanitizeText(raw.body, MAX_BODY_LEN),
     links,
   };

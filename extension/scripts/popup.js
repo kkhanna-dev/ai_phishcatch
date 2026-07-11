@@ -9,12 +9,87 @@ document.addEventListener("DOMContentLoaded", () => {
   const settingsPanel = document.getElementById("settingsPanel");
   const closeSettings = document.getElementById("closeSettings");
   const clearHistory = document.getElementById("clearHistory");
-  const apiUrlInput = document.getElementById("apiUrlInput");
-  const saveSettings = document.getElementById("saveSettings");
-  const settingsSavedMsg = document.getElementById("settingsSavedMsg");
+  const monitorDot = document.getElementById("monitorDot");
+  const monitorTitle = document.getElementById("monitorTitle");
+  const monitorDesc = document.getElementById("monitorDesc");
+  const connectGmailBtn = document.getElementById("connectGmailBtn");
+  const viewFlaggedBtn = document.getElementById("viewFlaggedBtn");
+  const catchupProgress = document.getElementById("catchupProgress");
+  const catchupFill = document.getElementById("catchupFill");
+  const catchupText = document.getElementById("catchupText");
 
   // Load stats and history
   loadDashboard();
+  refreshMonitorStatus();
+  setInterval(refreshMonitorStatus, 3000);
+
+  // Gmail Auto-Protection connect button
+  connectGmailBtn.addEventListener("click", async () => {
+    connectGmailBtn.disabled = true;
+    connectGmailBtn.textContent = "Connecting…";
+    try {
+      const resp = await sendMessage({ type: "CONNECT_GMAIL" });
+      if (resp?.error) throw new Error(resp.error);
+      await refreshMonitorStatus();
+    } catch (err) {
+      monitorDesc.textContent = `Connection failed: ${err.message}`;
+    } finally {
+      connectGmailBtn.disabled = false;
+      connectGmailBtn.textContent = "Connect Gmail";
+    }
+  });
+
+  viewFlaggedBtn.addEventListener("click", () => {
+    const query = encodeURIComponent('label:"PhishCatch/Flagged"');
+    chrome.tabs.create({ url: `https://mail.google.com/mail/u/0/#search/${query}` });
+  });
+
+  function sendMessage(msg) {
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(msg, (resp) => {
+        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        else resolve(resp);
+      });
+    });
+  }
+
+  async function refreshMonitorStatus() {
+    let status;
+    try {
+      status = await sendMessage({ type: "GET_MONITOR_STATUS" });
+    } catch {
+      return; // Service worker waking up — ignore transient errors.
+    }
+    if (!status) return;
+
+    monitorDot.classList.toggle("on", status.connected);
+
+    if (!status.connected) {
+      monitorTitle.textContent = "Gmail Auto-Protection: Off";
+      monitorDesc.textContent = "Connect once — PhishCatch will silently scan every email from then on.";
+      connectGmailBtn.style.display = "block";
+      viewFlaggedBtn.style.display = "none";
+      catchupProgress.style.display = "none";
+      return;
+    }
+
+    connectGmailBtn.style.display = "none";
+    viewFlaggedBtn.style.display = "block";
+
+    if (status.catchUpInProgress && status.catchUpProgress) {
+      const { scanned, total } = status.catchUpProgress;
+      const pct = total ? Math.min(100, Math.round((scanned / total) * 100)) : 0;
+      catchupProgress.style.display = "flex";
+      catchupFill.style.width = `${pct}%`;
+      catchupText.textContent = `Scanning inbox… ${scanned}/${total}`;
+    } else {
+      catchupProgress.style.display = "none";
+    }
+
+    monitorTitle.textContent = "Gmail Auto-Protection: On";
+    const lastScan = status.lastScanAt ? formatTimeAgo(status.lastScanAt) : "not yet";
+    monitorDesc.textContent = `Last checked ${lastScan} · ${status.flaggedCount} flagged`;
+  }
 
   // Scan button
   scanBtn.addEventListener("click", async () => {
@@ -61,28 +136,9 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Settings
-  settingsBtn.addEventListener("click", () => {
-    chrome.storage.local.get(["apiUrl"], (stored) => {
-      apiUrlInput.value = stored.apiUrl || "";
-    });
-    settingsPanel.classList.add("open");
-  });
+  settingsBtn.addEventListener("click", () => settingsPanel.classList.add("open"));
 
   closeSettings.addEventListener("click", () => settingsPanel.classList.remove("open"));
-
-  saveSettings.addEventListener("click", () => {
-    const value = apiUrlInput.value.trim().replace(/\/+$/, "");
-
-    if (value && !/^https?:\/\//i.test(value)) {
-      apiUrlInput.focus();
-      return;
-    }
-
-    chrome.storage.local.set({ apiUrl: value }, () => {
-      settingsSavedMsg.style.display = "block";
-      setTimeout(() => (settingsSavedMsg.style.display = "none"), 1500);
-    });
-  });
 
   clearHistory.addEventListener("click", () => {
     chrome.storage.local.set({ scanHistory: [] }, () => {
