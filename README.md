@@ -1,8 +1,10 @@
-# cf_ai_phishcatch
+# PhishCatch
 
-AI-powered email phishing detector built on Cloudflare. Scans emails for phishing indicators using Llama 3.3 via Workers AI and returns a risk score with detailed findings.
+AI-powered email phishing detector. Paste an email into the web app, or install the Chrome extension to
+get an automatic risk score every time you open an email in Gmail.
 
-Works as a **Chrome extension** that auto-scans Gmail, and as a **web app** for manual analysis.
+Works as a **Chrome extension** (auto-scans Gmail) and as a **web app** (manual analysis, built with
+Next.js + Tailwind CSS).
 
 ---
 
@@ -10,48 +12,62 @@ Works as a **Chrome extension** that auto-scans Gmail, and as a **web app** for 
 
 ```
 Chrome Extension ──┐
-                   ├──▶ Cloudflare Worker ──▶ Workers AI (Llama 3.3)
-Web UI ────────────┘         │
-                        KV (cache) + Durable Object (history)
+                    ├──▶ Next.js API (/api/analyze) ──▶ Anthropic Claude
+Web App ───────────┘
 ```
 
-1. Email data (subject, sender, body, links) is sent to the Worker
-2. Worker checks KV cache — if miss, calls Llama 3.3 for analysis
-3. LLM evaluates 10 phishing indicators and returns a structured score
-4. Result is cached in KV (1h) and persisted in a Durable Object
-5. Client renders a verdict: SAFE / SUSPICIOUS / DANGEROUS with indicator breakdown
+1. Email data (subject, sender, body, links) is sanitized and validated on the server
+2. Claude evaluates 10 phishing indicators and returns a structured risk score
+3. The client renders a verdict — **SAFE / SUSPICIOUS / DANGEROUS** — with an indicator breakdown
+4. Scan history is kept locally (browser `localStorage` for the web app, `chrome.storage.local` for the
+   extension) — no server-side database, nothing about your scans leaves your machine except the single
+   analysis request
 
-## Cloudflare Components
+## Security
 
-| Requirement | What's Used |
-|---|---|
-| LLM | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` via Workers AI |
-| Workflow / Coordination | Cloudflare Worker handles routing, validation, caching, and DO writes |
-| User Input | Cloudflare Pages web app with chat-style UI |
-| Memory / State | KV namespace (result cache) + Durable Object (scan history) |
+This isn't a toy demo — the API is built to withstand real internet traffic:
+
+- **Input validation & sanitization** — all fields are length-capped, HTML/control characters are
+  stripped before anything reaches the LLM prompt, and untrusted email content is explicitly delimited
+  and never treated as instructions (prompt-injection resistant)
+- **Strict output validation** — the model's JSON response is parsed and validated against a schema
+  (`zod`); a malformed or manipulated response can never crash the API or return garbage to a client, and
+  score/verdict are always normalized to stay consistent
+- **Rate limiting** — per-IP sliding-window limiter on `/api/analyze` (defaults: 20 requests/minute,
+  configurable)
+- **CORS allow-list** — no wildcard `Access-Control-Allow-Origin`; only origins you explicitly configure
+  (e.g. your extension's `chrome-extension://` origin) can call the API cross-origin
+- **Timeouts & retries** — upstream Claude calls are bounded by a hard timeout with capped, backed-off
+  retries so a slow/failing upstream never hangs a request indefinitely
+- **Security headers** — CSP, HSTS, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+  restrictive `Permissions-Policy`
+- **No secret leakage** — upstream/auth errors are logged server-side but never surfaced to the client
+- **Extension hardening** — a `content_security_policy` locks down extension pages, all rendered scan
+  data is HTML-escaped (React auto-escapes in the web app; the extension escapes manually), and
+  DOM event handlers use `addEventListener` instead of inline `onclick` so the Gmail banner keeps working
+  even under a strict host-page CSP
 
 ## Project Structure
 
 ```
-worker/                        # Cloudflare Worker
-├── wrangler.toml
-└── src/
-    ├── index.ts               # Routes: /api/analyze, /api/history, /api/stats
-    ├── analyze.ts             # Llama 3.3 analysis + KV cache
-    ├── types.ts
-    └── durable-objects/
-        └── scan-history.ts    # Persistent scan log (last 100)
+backend/                        # Next.js app — API + web frontend
+├── app/
+│   ├── page.tsx                # Renders the web app
+│   ├── layout.tsx
+│   ├── globals.css
+│   └── api/
+│       ├── analyze/route.ts    # POST /api/analyze
+│       └── health/route.ts     # GET /api/health
+├── components/                 # React UI components (analyzer form, result card, etc.)
+└── lib/                        # env, cors, rate limiting, sanitization, schemas, Claude client
 
-pages/
-└── index.html                 # Web UI (Cloudflare Pages)
-
-extension/                     # Chrome Extension (Manifest V3)
+extension/                      # Chrome Extension (Manifest V3)
 ├── manifest.json
 ├── popup.html
 ├── scripts/
-│   ├── background.js          # API calls + local history
-│   ├── content.js             # Gmail scraping + auto-scan
-│   └── popup.js               # Dashboard
+│   ├── background.js           # API calls + local history + settings
+│   ├── content.js               # Gmail scraping + auto-scan banner
+│   └── popup.js                 # Dashboard + settings UI
 └── styles/
     ├── popup.css
     └── content.css
@@ -61,47 +77,44 @@ extension/                     # Chrome Extension (Manifest V3)
 
 ### Prerequisites
 
-- Cloudflare account (free tier works)
 - Node.js 18+
-- Wrangler CLI: `npm install -g wrangler` then `wrangler login`
+- An [Anthropic API key](https://console.anthropic.com/)
 
-### Deploy the Worker
+### Run the app locally
 
 ```bash
-cd worker
+cd backend
 npm install
-
-# Create the KV namespace, then paste the IDs into wrangler.toml
-wrangler kv:namespace create SCAN_CACHE
-
-wrangler deploy
+cp .env.example .env.local   # then fill in ANTHROPIC_API_KEY
+npm run dev
 ```
 
-Your Worker URL will be printed — something like `https://cf-ai-phishcatch.<subdomain>.workers.dev`.
+Open `http://localhost:3000` — the web app and API are both served from here.
 
-### Deploy the Web UI
+### Deploy
+
+Deploy `backend/` to [Vercel](https://vercel.com) (or any Node.js host):
 
 ```bash
-wrangler pages deploy pages/ --project-name cf-ai-phishcatch-ui
+cd backend
+vercel deploy
 ```
 
-Open `pages/index.html` and set the `API_URL` variable to your Worker URL. Locally it defaults to `http://localhost:8787`.
+Set the following environment variables in your deployment:
 
-### Run Locally
-
-```bash
-cd worker
-npm install
-wrangler dev
-```
-
-Then open `pages/index.html` in a browser — it auto-detects localhost.
+| Variable | Required | Description |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Yes | Your Anthropic API key |
+| `ALLOWED_ORIGINS` | Recommended | Comma-separated origins allowed to call the API cross-origin (e.g. `chrome-extension://<id>`) |
+| `RATE_LIMIT_MAX` | No | Requests per IP per window on `/api/analyze` (default `20`) |
+| `RATE_LIMIT_WINDOW_MS` | No | Rate-limit window in ms (default `60000`) |
 
 ### Chrome Extension
 
 1. Go to `chrome://extensions/`, enable Developer mode
 2. Click **Load unpacked** and select the `extension/` folder
-3. Set `API_URL` in `extension/scripts/background.js` to your Worker URL
+3. Click the PhishCatch icon → gear icon → set the **API Endpoint** to your deployed URL (or edit
+   `DEFAULT_API_URL` in `extension/scripts/background.js` before packaging)
 4. Open Gmail and open any email — it scans automatically
 
 ## API
@@ -130,15 +143,22 @@ Then open `pages/index.html` in a browser — it auto-detects localhost.
 }
 ```
 
-Cached responses include `"cached": true`.
+Errors return `{ "error": "..." }` with an appropriate status code: `400` (invalid input), `429` (rate
+limited), `502`/`504` (upstream failure/timeout).
 
-### `GET /api/history?limit=50`
+### `GET /api/health`
 
-Returns recent scans from the Durable Object.
+Returns `{ status, service, uptimeSeconds }`.
 
-### `GET /api/stats`
+## Tech Stack
 
-Returns `{ total, safe, suspicious, dangerous, avgScore }`.
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 14 (App Router), React 18, Tailwind CSS |
+| API | Next.js Route Handlers (Node.js runtime), Zod validation |
+| LLM | Anthropic Claude (`claude-sonnet-4-20250514`) |
+| Extension | Chrome Manifest V3, vanilla JS |
+| Storage | Browser-local only (`localStorage` / `chrome.storage.local`) — no server database |
 
 ## License
 

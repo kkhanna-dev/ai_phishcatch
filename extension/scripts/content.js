@@ -118,7 +118,7 @@
           <span class="phishcatch-banner-text">
             <strong>PhishCatch</strong> — Could not scan: ${escapeHtml(result?.summary || "Unknown error")}
           </span>
-          <button class="phishcatch-dismiss" onclick="this.closest('#phishcatch-banner').remove()">✕</button>
+          <button class="phishcatch-dismiss" type="button">✕</button>
         </div>
       `;
     } else {
@@ -142,7 +142,7 @@
             </span>
             ${indicatorHtml ? `<div class="phishcatch-indicators">${indicatorHtml}</div>` : ""}
           </div>
-          <button class="phishcatch-dismiss" onclick="this.closest('#phishcatch-banner').remove()">✕</button>
+          <button class="phishcatch-dismiss" type="button">✕</button>
         </div>
       `;
     }
@@ -153,6 +153,13 @@
       document.querySelector('.nH');
     if (emailContainer) {
       emailContainer.insertBefore(banner, emailContainer.firstChild);
+    }
+
+    // Attach the dismiss handler via addEventListener rather than an inline
+    // onclick attribute, so the banner still works under a strict host-page CSP.
+    const dismissBtn = banner.querySelector(".phishcatch-dismiss");
+    if (dismissBtn) {
+      dismissBtn.addEventListener("click", () => banner.remove());
     }
   }
 

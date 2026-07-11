@@ -9,6 +9,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const settingsPanel = document.getElementById("settingsPanel");
   const closeSettings = document.getElementById("closeSettings");
   const clearHistory = document.getElementById("clearHistory");
+  const apiUrlInput = document.getElementById("apiUrlInput");
+  const saveSettings = document.getElementById("saveSettings");
+  const settingsSavedMsg = document.getElementById("settingsSavedMsg");
 
   // Load stats and history
   loadDashboard();
@@ -59,10 +62,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Settings
   settingsBtn.addEventListener("click", () => {
+    chrome.storage.local.get(["apiUrl"], (stored) => {
+      apiUrlInput.value = stored.apiUrl || "";
+    });
     settingsPanel.classList.add("open");
   });
 
   closeSettings.addEventListener("click", () => settingsPanel.classList.remove("open"));
+
+  saveSettings.addEventListener("click", () => {
+    const value = apiUrlInput.value.trim().replace(/\/+$/, "");
+
+    if (value && !/^https?:\/\//i.test(value)) {
+      apiUrlInput.focus();
+      return;
+    }
+
+    chrome.storage.local.set({ apiUrl: value }, () => {
+      settingsSavedMsg.style.display = "block";
+      setTimeout(() => (settingsSavedMsg.style.display = "none"), 1500);
+    });
+  });
 
   clearHistory.addEventListener("click", () => {
     chrome.storage.local.set({ scanHistory: [] }, () => {

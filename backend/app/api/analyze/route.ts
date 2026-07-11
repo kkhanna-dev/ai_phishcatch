@@ -1,89 +1,77 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
+import { ZodError } from "zod";
+import Anthropic from "@anthropic-ai/sdk";
+import { buildCorsHeaders } from "../../../lib/cors";
+import { checkRateLimit, getClientKey } from "../../../lib/rateLimit";
+import { sanitizeEmailInput } from "../../../lib/sanitize";
+import { EmailInputSchema } from "../../../lib/schema";
+import { analyzeEmailWithClaude } from "../../../lib/anthropicClient";
 
-const anthropic = new Anthropic();
+export const runtime = "nodejs";
 
-export async function OPTIONS() {
+function jsonError(status: number, error: string, origin: string | null, extraHeaders?: HeadersInit) {
+  return NextResponse.json(
+    { error },
+    { status, headers: { ...buildCorsHeaders(origin), ...extraHeaders } }
+  );
+}
+
+export async function OPTIONS(request: NextRequest) {
   return new NextResponse(null, {
-    status: 200,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    },
+    status: 204,
+    headers: buildCorsHeaders(request.headers.get("origin")),
   });
 }
 
 export async function POST(request: NextRequest) {
+  const origin = request.headers.get("origin");
+
+  // --- Rate limiting -------------------------------------------------
+  const clientKey = getClientKey(request.headers);
+  const rateLimit = checkRateLimit(clientKey);
+  if (!rateLimit.allowed) {
+    return jsonError(429, "Too many requests. Please slow down and try again shortly.", origin, {
+      "Retry-After": Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString(),
+    });
+  }
+
+  // --- Parse & validate body ------------------------------------------
+  let rawBody: unknown;
   try {
-    const { subject, sender, body, links } = await request.json();
+    rawBody = await request.json();
+  } catch {
+    return jsonError(400, "Request body must be valid JSON", origin);
+  }
 
-    if (!body && !subject) {
-      return NextResponse.json({ error: "Email body or subject is required" }, { status: 400 });
+  const sanitized = sanitizeEmailInput(
+    rawBody && typeof rawBody === "object" ? (rawBody as Record<string, unknown>) : {}
+  );
+
+  let input;
+  try {
+    input = EmailInputSchema.parse(sanitized);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return jsonError(400, error.issues[0]?.message || "Invalid request", origin);
+    }
+    return jsonError(400, "Invalid request", origin);
+  }
+
+  // --- Analyze ----------------------------------------------------------
+  try {
+    const analysis = await analyzeEmailWithClaude(input);
+    return NextResponse.json(analysis, { headers: buildCorsHeaders(origin) });
+  } catch (error) {
+    console.error("Analysis error:", error instanceof Error ? error.message : error);
+
+    if (error instanceof Anthropic.APIError && error.status === 401) {
+      // Never leak whether/why the upstream key is invalid to the client.
+      return jsonError(502, "Analysis service is temporarily unavailable", origin);
+    }
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return jsonError(504, "Analysis timed out. Please try again.", origin);
     }
 
-    const emailContent = `
-Subject: ${subject || "(no subject)"}
-From: ${sender || "(unknown sender)"}
-Links found in email: ${links?.length ? links.join(", ") : "none"}
-
-Email Body:
-${body || "(empty)"}
-`.trim();
-
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1024,
-      messages: [
-        {
-          role: "user",
-          content: `You are an expert email security analyst. Analyze this email for phishing indicators and return a JSON response.
-
-Evaluate these factors:
-1. Sender legitimacy (spoofed domains, free email providers impersonating companies)
-2. Urgency/pressure tactics ("act now", "account suspended", "verify immediately")
-3. Suspicious links (mismatched display text vs URL, URL shorteners, lookalike domains)
-4. Grammar and spelling errors typical of phishing
-5. Requests for sensitive info (passwords, SSN, credit cards, login credentials)
-6. Impersonation of known brands or authority figures
-7. Too-good-to-be-true offers
-8. Mismatched reply-to addresses
-9. Generic greetings vs personalized content
-10. Attachment references or download requests
-
-Return ONLY valid JSON in this exact format:
-{
-  "score": <number 0-100, where 0 is safe and 100 is definitely phishing>,
-  "verdict": "<SAFE|SUSPICIOUS|DANGEROUS>",
-  "summary": "<one sentence summary>",
-  "indicators": [
-    {"type": "<indicator category>", "detail": "<specific finding>", "severity": "<low|medium|high>"}
-  ],
-  "recommendations": ["<actionable recommendation>"]
-}
-
-Email to analyze:
-${emailContent}`,
-        },
-      ],
-    });
-
-    const responseText = message.content[0].type === "text" ? message.content[0].text : "";
-
-    // Extract JSON from response
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return NextResponse.json({ error: "Failed to parse analysis" }, { status: 500 });
-    }
-
-    const analysis = JSON.parse(jsonMatch[0]);
-
-    return NextResponse.json(analysis, {
-      headers: { "Access-Control-Allow-Origin": "*" },
-    });
-  } catch (error: unknown) {
-    console.error("Analysis error:", error);
-    const message = error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return jsonError(502, "Failed to analyze email. Please try again in a moment.", origin);
   }
 }

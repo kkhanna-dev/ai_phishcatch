@@ -10,7 +10,9 @@
       "Bash(npx vercel:*)",
       "Bash(git add:*)",
       "Bash(git push:*)",
-      "Bash(python scripts/office/unpack.py \"C:/Users/vlwhi/Tech_Resume/Tech_Resume_KartikKhanna.docx\" \"C:/Users/vlwhi/Tech_Resume/unpacked/\")"
+      "Bash(python scripts/office/unpack.py \"C:/Users/vlwhi/Tech_Resume/Tech_Resume_KartikKhanna.docx\" \"C:/Users/vlwhi/Tech_Resume/unpacked/\")",
+      "Skill(claude-api)",
+      "Skill(claude-api:*)"
     ]
   }
 }

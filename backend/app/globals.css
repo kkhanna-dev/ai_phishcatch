@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  background-color: #0a0b10;
+  color: #e5e7f5;
+}
+
+::selection {
+  background: rgba(99, 102, 241, 0.35);
+}
+
+/* Slim, unobtrusive scrollbars for the dark theme */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2d3048 transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2d3048;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #3d4160;
+}
+
+.score-ring {
+  background: conic-gradient(var(--ring-color) calc(var(--ring-pct) * 1%), #262838 0);
+}
