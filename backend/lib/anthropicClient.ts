@@ -10,7 +10,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getEnv } from "./env";
 import { AnalysisResult, AnalysisResultSchema } from "./schema";
 
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-5-20250929";
 const REQUEST_TIMEOUT_MS = 20_000;
 const MAX_RETRIES = 2;
 const RETRY_BASE_DELAY_MS = 400;
