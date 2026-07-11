@@ -107,7 +107,7 @@
         <div class="phishcatch-banner-content">
           <div class="phishcatch-spinner"></div>
           <span class="phishcatch-banner-text">
-            <strong>PhishCatch</strong> — Scanning email for phishing threats...
+            <strong>PhishCatch</strong>: Scanning email for phishing threats...
           </span>
         </div>
       `;
@@ -116,7 +116,7 @@
         <div class="phishcatch-banner-content">
           <span class="phishcatch-icon">⚠️</span>
           <span class="phishcatch-banner-text">
-            <strong>PhishCatch</strong> — Could not scan: ${escapeHtml(result?.summary || "Unknown error")}
+            <strong>PhishCatch</strong>: Could not scan: ${escapeHtml(result?.summary || "Unknown error")}
           </span>
           <button class="phishcatch-dismiss" type="button">✕</button>
         </div>
@@ -138,7 +138,7 @@
           </div>
           <div class="phishcatch-banner-info">
             <span class="phishcatch-banner-text">
-              <strong>PhishCatch</strong> — ${escapeHtml(result.summary || result.verdict)}
+              <strong>PhishCatch</strong>: ${escapeHtml(result.summary || result.verdict)}
             </span>
             ${indicatorHtml ? `<div class="phishcatch-indicators">${indicatorHtml}</div>` : ""}
           </div>

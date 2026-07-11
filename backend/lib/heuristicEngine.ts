@@ -1,5 +1,5 @@
 /**
- * Rule-based phishing detection engine — no LLM, no external API calls, no
+ * Rule-based phishing detection engine: no LLM, no external API calls, no
  * per-email cost. Everything here is a deterministic, explainable heuristic:
  * lookalike/spoofed sender domains, urgency and credential-harvesting
  * language, scam/lure phrasing, suspicious link shapes, and low-quality
@@ -124,7 +124,7 @@ function normalizeHomoglyphs(s: string): string {
 
 /**
  * Checks whether `brandName` appears as a distinct token in `text` (bounded
- * by start/end of string or non-word characters like "." "-" or a space) —
+ * by start/end of string or non-word characters like "." "-" or a space),
  * not merely as a substring. Without this, a short brand name like "x"
  * (from x.com) would false-positive on any word containing that letter,
  * e.g. "Alex" or "example.com".
@@ -168,7 +168,7 @@ function checkDomainAgainstBrands(domain: string): { brand: string; reason: "imp
   const registrable = getRegistrableDomain(domain);
 
   for (const brand of KNOWN_BRANDS) {
-    if (registrable === brand) return null; // exact match to a real brand domain — trusted
+    if (registrable === brand) return null; // exact match to a real brand domain, trusted
   }
 
   for (const brand of KNOWN_BRANDS) {
@@ -324,7 +324,7 @@ export function analyzeEmailHeuristically(params: AnalyzeParams): AnalysisResult
     }
 
     if (hostname.includes("xn--")) {
-      pushIndicator(indicators, "Suspicious Link", `Link uses punycode encoding (${hostname}) — possible homograph attack`, "high", 0);
+      pushIndicator(indicators, "Suspicious Link", `Link uses punycode encoding (${hostname}): possible homograph attack`, "high", 0);
       linkPoints += 20;
       continue;
     }
@@ -389,7 +389,7 @@ export function analyzeEmailHeuristically(params: AnalyzeParams): AnalysisResult
 
   const recommendations =
     verdict === "SAFE"
-      ? ["No action needed — this email doesn't show signs of phishing.", "Still verify sender identity before sharing sensitive info."]
+      ? ["No action needed. This email doesn't show signs of phishing.", "Still verify sender identity before sharing sensitive info."]
       : verdict === "SUSPICIOUS"
       ? [
           "Don't click links or download attachments until you verify the sender.",

@@ -17,8 +17,8 @@ const nextConfig = {
 
     return [
       {
-        // Security headers on every response. CORS headers are NOT set here —
-        // they're computed per-request against an allow-list in lib/cors.ts
+        // Security headers on every response. CORS headers are NOT set here.
+        // They're computed per-request against an allow-list in lib/cors.ts
         // and applied directly by each API route, since a static wildcard
         // would defeat the purpose of an allow-list.
         source: "/:path*",

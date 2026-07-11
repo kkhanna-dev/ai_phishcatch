@@ -14,6 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const monitorDesc = document.getElementById("monitorDesc");
   const connectGmailBtn = document.getElementById("connectGmailBtn");
   const viewFlaggedBtn = document.getElementById("viewFlaggedBtn");
+  const viewBulkBtn = document.getElementById("viewBulkBtn");
   const catchupProgress = document.getElementById("catchupProgress");
   const catchupFill = document.getElementById("catchupFill");
   const catchupText = document.getElementById("catchupText");
@@ -39,10 +40,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  viewFlaggedBtn.addEventListener("click", () => {
-    const query = encodeURIComponent('label:"PhishCatch/Flagged"');
+  viewFlaggedBtn.addEventListener("click", () => openGmailLabel("PhishCatch/Flagged"));
+  viewBulkBtn.addEventListener("click", () => openGmailLabel("PhishCatch/Bulk"));
+
+  function openGmailLabel(label) {
+    const query = encodeURIComponent(`label:"${label}"`);
     chrome.tabs.create({ url: `https://mail.google.com/mail/u/0/#search/${query}` });
-  });
+  }
 
   function sendMessage(msg) {
     return new Promise((resolve, reject) => {
@@ -58,7 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       status = await sendMessage({ type: "GET_MONITOR_STATUS" });
     } catch {
-      return; // Service worker waking up — ignore transient errors.
+      return; // Service worker waking up, ignore transient errors.
     }
     if (!status) return;
 
@@ -66,15 +70,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!status.connected) {
       monitorTitle.textContent = "Gmail Auto-Protection: Off";
-      monitorDesc.textContent = "Connect once — PhishCatch will silently scan every email from then on.";
+      monitorDesc.textContent = "Connect once. PhishCatch will silently scan every email from then on.";
       connectGmailBtn.style.display = "block";
       viewFlaggedBtn.style.display = "none";
+      viewBulkBtn.style.display = "none";
       catchupProgress.style.display = "none";
       return;
     }
 
     connectGmailBtn.style.display = "none";
     viewFlaggedBtn.style.display = "block";
+    viewBulkBtn.style.display = "block";
 
     if (status.catchUpInProgress && status.catchUpProgress) {
       const { scanned, total } = status.catchUpProgress;
@@ -88,7 +94,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     monitorTitle.textContent = "Gmail Auto-Protection: On";
     const lastScan = status.lastScanAt ? formatTimeAgo(status.lastScanAt) : "not yet";
-    monitorDesc.textContent = `Last checked ${lastScan} · ${status.flaggedCount} flagged`;
+    monitorDesc.textContent = `Last checked ${lastScan} · ${status.flaggedCount} flagged · ${status.bulkCount} decluttered`;
   }
 
   // Scan button
@@ -156,7 +162,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function showScanResult(result) {
     const verdict = result.verdict?.toLowerCase() || "safe";
     const type = verdict === "safe" ? "active" : verdict === "suspicious" ? "warning" : "danger";
-    showStatus(type, `Score: ${result.score}/100 — ${result.verdict}`, result.summary);
+    showStatus(type, `Score: ${result.score}/100 (${result.verdict})`, result.summary);
   }
 
   function loadDashboard() {

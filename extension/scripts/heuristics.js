@@ -1,4 +1,4 @@
-// PhishCatch rule-based phishing detection engine — no LLM, no external API
+// PhishCatch rule-based phishing detection engine: no LLM, no external API
 // calls, no per-email cost. Runs entirely inside the extension's service
 // worker so both the manual "Scan Current Email" flow and the autonomous
 // Gmail monitor can score every email instantly and offline.
@@ -7,7 +7,7 @@
 // can't import TypeScript). Keep the two in sync if you change scoring
 // rules in either place.
 //
-// Loaded via importScripts() in background.js — exposes a global instead of
+// Loaded via importScripts() in background.js, exposes a global instead of
 // using ES module exports.
 
 const KNOWN_BRANDS = [
@@ -105,7 +105,7 @@ function normalizeHomoglyphs(s) {
 
 /**
  * Checks whether `brandName` appears as a distinct token in `text` (bounded
- * by start/end of string or non-word characters like "." "-" or a space) —
+ * by start/end of string or non-word characters like "." "-" or a space),
  * not merely as a substring. Without this, a short brand name like "x"
  * (from x.com) would false-positive on any word containing that letter,
  * e.g. "Alex" or "example.com".
@@ -149,7 +149,7 @@ function checkDomainAgainstBrands(domain) {
   const registrable = getRegistrableDomain(domain);
 
   for (const brand of KNOWN_BRANDS) {
-    if (registrable === brand) return null; // exact match to a real brand domain — trusted
+    if (registrable === brand) return null; // exact match to a real brand domain, trusted
   }
 
   for (const brand of KNOWN_BRANDS) {
@@ -305,7 +305,7 @@ function analyzeEmailHeuristically(params) {
     }
 
     if (hostname.includes("xn--")) {
-      pushIndicator(indicators, "Suspicious Link", `Link uses punycode encoding (${hostname}) — possible homograph attack`, "high", 0);
+      pushIndicator(indicators, "Suspicious Link", `Link uses punycode encoding (${hostname}): possible homograph attack`, "high", 0);
       linkPoints += 20;
       continue;
     }
@@ -367,7 +367,7 @@ function analyzeEmailHeuristically(params) {
 
   const recommendations =
     verdict === "SAFE"
-      ? ["No action needed — this email doesn't show signs of phishing.", "Still verify sender identity before sharing sensitive info."]
+      ? ["No action needed. This email doesn't show signs of phishing.", "Still verify sender identity before sharing sensitive info."]
       : verdict === "SUSPICIOUS"
       ? [
           "Don't click links or download attachments until you verify the sender.",

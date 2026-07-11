@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "PhishCatch — Local Email Phishing Detector",
+  "name": "PhishCatch: Local Email Phishing Detector",
   "version": "2.0.0",
-  "description": "Instant, on-device email phishing detection — no AI, no cloud, no per-email cost. Automatically monitors your Gmail inbox in the background and flags dangerous emails — no clicking required.",
+  "description": "Instant, on-device email phishing detection. No AI, no cloud, no per-email cost. Automatically monitors your Gmail inbox in the background and flags dangerous emails, no clicking required.",
   "permissions": ["activeTab", "storage", "scripting", "alarms", "identity"],
   "host_permissions": ["https://mail.google.com/*", "https://gmail.googleapis.com/*"],
   "oauth2": {

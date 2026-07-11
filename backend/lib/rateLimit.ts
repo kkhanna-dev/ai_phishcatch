@@ -4,7 +4,7 @@
  * This is intentionally dependency-free (no Redis/Upstash/etc). It protects
  * a single running instance from abuse and accidental infinite-retry loops.
  * On serverless platforms with multiple concurrent instances the limit is
- * enforced per-instance rather than globally — acceptable for this project's
+ * enforced per-instance rather than globally, acceptable for this project's
  * scale, and still far better than no limiting at all. If you need a hard
  * global limit across many instances, swap this module for a shared store.
  */

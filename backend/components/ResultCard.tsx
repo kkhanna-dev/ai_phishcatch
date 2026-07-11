@@ -26,7 +26,7 @@ export default function ResultCard({ result, cached }: { result: AnalysisResult;
             <div key={i} className="flex items-start gap-2 rounded-lg bg-white/5 px-3 py-2 text-sm">
               <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${SEVERITY_DOT[ind.severity]}`} />
               <span>
-                <strong className="font-semibold">{ind.type}</strong> — {ind.detail}
+                <strong className="font-semibold">{ind.type}</strong>: {ind.detail}
               </span>
             </div>
           ))}

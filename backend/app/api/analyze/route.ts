@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
   }
 
   // --- Analyze ----------------------------------------------------------
-  // Fully local rule-based scoring — no external API calls, no per-email
+  // Fully local rule-based scoring: no external API calls, no per-email
   // cost, no network dependency, and it can never time out or get
   // rate-limited upstream because there is no upstream.
   try {

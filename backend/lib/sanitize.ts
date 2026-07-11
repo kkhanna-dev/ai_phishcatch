@@ -31,7 +31,7 @@ export function sanitizeText(input: unknown, maxLen: number): string {
 /**
  * Sanitizes a "From" header value like `Display Name <user@example.com>` or
  * a bare `user@example.com`. The generic stripHtml() above treats any
- * `<...>` as an HTML tag and deletes it — which would silently destroy the
+ * `<...>` as an HTML tag and deletes it, which would silently destroy the
  * bracketed email address (and with it, the sender's domain, which most
  * phishing heuristics depend on). This preserves a trailing `<...@...>`
  * address while still stripping HTML from the display-name portion.

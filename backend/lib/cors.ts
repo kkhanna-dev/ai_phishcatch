@@ -1,8 +1,8 @@
 /**
  * CORS handling with an explicit allow-list instead of a blanket
  * `Access-Control-Allow-Origin: *`. This matters here because the API
- * accepts POST requests carrying (potentially sensitive) email content —
- * a wildcard origin would let any website's JS silently relay traffic
+ * accepts POST requests carrying (potentially sensitive) email content.
+ * A wildcard origin would let any website's JS silently relay traffic
  * through a visitor's browser.
  *
  * Configure allowed origins via ALLOWED_ORIGINS (comma separated), e.g.:
@@ -21,7 +21,7 @@ export function resolveCorsOrigin(requestOrigin: string | null): string | null {
 
   if (allowed.includes(requestOrigin)) return requestOrigin;
 
-  // Convenience for local development only — never in production.
+  // Convenience for local development only, never in production.
   if (!isProduction() && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(requestOrigin)) {
     return requestOrigin;
   }

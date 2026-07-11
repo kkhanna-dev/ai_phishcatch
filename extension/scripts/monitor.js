@@ -7,11 +7,23 @@
 //   2. A recurring poll (chrome.alarms, since MV3 service workers cannot use
 //      setInterval reliably) that checks for new mail every few minutes.
 //
-// Anything the AI scores as DANGEROUS gets the "PhishCatch/Flagged" Gmail
-// label applied. The INBOX label is never removed — nothing is archived,
-// moved to Spam, or deleted. Flagged mail simply becomes easy to find later.
+// Two independent things happen to each message:
 //
-// Loaded via importScripts() in background.js — exposes a global instead of
+//   1. Security: anything the local heuristic engine scores as DANGEROUS gets
+//      the "PhishCatch/Flagged" label. Flagged mail is never archived, moved
+//      to Spam, or deleted; it stays in the inbox and simply becomes easy to
+//      find later.
+//
+//   2. Declutter: anything the bulk classifier (bulk.js) recognizes as routine
+//      bulk/promotional mail (job alerts, newsletters, LinkedIn/Indeed
+//      notifications) gets the "PhishCatch/Bulk" label. Bulk mail that the
+//      phishing engine considers SAFE is also archived out of the inbox view
+//      (the INBOX label is removed) so the inbox stays clean. This is
+//      reversible: nothing is deleted, and the mail stays findable under the
+//      label. Mail that is anything but SAFE is labeled but left in the inbox,
+//      so a suspicious or dangerous message is never hidden.
+//
+// Loaded via importScripts() in background.js, exposes a global instead of
 // using ES module exports.
 
 const POLL_ALARM_NAME = "phishcatch-poll";
@@ -39,13 +51,19 @@ async function saveScannedIds(idSet) {
   await chrome.storage.local.set({ scannedMessageIds: ids });
 }
 
-async function bumpFlaggedCount() {
-  const { monitorFlaggedCount } = await chrome.storage.local.get(["monitorFlaggedCount"]);
-  await chrome.storage.local.set({ monitorFlaggedCount: (monitorFlaggedCount || 0) + 1 });
+async function bumpCount(key) {
+  const stored = await chrome.storage.local.get([key]);
+  await chrome.storage.local.set({ [key]: (stored[key] || 0) + 1 });
 }
 
-/** Fetches, analyzes, records, and (if dangerous) labels a single message. */
-async function processMessage(token, labelId, id, scannedIds) {
+/**
+ * Fetches and analyzes a single message, then, independently:
+ *   - flags it if the phishing engine scores it DANGEROUS, and
+ *   - labels (and, when SAFE, archives) it if it's routine bulk/promotional.
+ */
+async function processMessage(token, labels, id, scannedIds) {
+  const { flagLabelId, bulkLabelId } = labels;
+
   let message;
   try {
     message = await self.PhishCatchGmail.getMessage(token, id);
@@ -81,30 +99,67 @@ async function processMessage(token, labelId, id, scannedIds) {
 
   if (FLAG_VERDICTS.includes(result.verdict)) {
     try {
-      await self.PhishCatchGmail.labelMessage(token, id, labelId);
-      await bumpFlaggedCount();
+      await self.PhishCatchGmail.labelMessage(token, id, flagLabelId);
+      await bumpCount("monitorFlaggedCount");
     } catch (err) {
       console.error(`PhishCatch: failed to label message ${id}:`, err.message);
     }
+  }
+
+  // Declutter pass, independent of the phishing verdict above. Dangerous mail
+  // is never hidden, so only SAFE bulk mail is archived out of the inbox;
+  // anything else is labeled in place.
+  if (bulkLabelId) await applyBulkLabel(token, bulkLabelId, id, message, result);
+}
+
+/** Labels bulk/promotional mail and archives it when the message is SAFE. */
+async function applyBulkLabel(token, bulkLabelId, id, message, result) {
+  let bulk;
+  try {
+    bulk = self.PhishCatchBulk.classifyBulk({
+      sender: message.sender,
+      subject: message.subject,
+      listUnsubscribe: message.listUnsubscribe,
+      listId: message.listId,
+      precedence: message.precedence,
+    });
+  } catch (err) {
+    console.error(`PhishCatch: bulk classification failed for message ${id}:`, err.message);
+    return;
+  }
+  if (!bulk.isBulk) return;
+
+  const archive = result.verdict === "SAFE";
+  try {
+    if (archive) await self.PhishCatchGmail.archiveWithLabel(token, id, bulkLabelId);
+    else await self.PhishCatchGmail.labelMessage(token, id, bulkLabelId);
+    await bumpCount("monitorBulkCount");
+  } catch (err) {
+    console.error(`PhishCatch: failed to declutter message ${id}:`, err.message);
   }
 }
 
 /** One-time gesture: authorize Gmail access and start protection. */
 async function connect() {
   const token = await self.PhishCatchGmail.getAuthToken(true);
-  const labelId = await self.PhishCatchGmail.ensureFlagLabel(token);
+  const flagLabelId = await self.PhishCatchGmail.ensureFlagLabel(token);
+  const bulkLabelId = await self.PhishCatchGmail.ensureBulkLabel(token);
 
   await chrome.storage.local.set({
     gmailConnected: true,
-    flagLabelId: labelId,
+    flagLabelId,
+    bulkLabelId,
     monitorFlaggedCount: 0,
+    monitorBulkCount: 0,
   });
 
   chrome.alarms.create(POLL_ALARM_NAME, { periodInMinutes: POLL_PERIOD_MINUTES });
 
-  // Run the catch-up scan in the background without blocking the popup —
-  // scanning ~150 emails can take a couple of minutes.
-  runCatchUpScan(token, labelId).catch((err) => console.error("PhishCatch catch-up scan failed:", err.message));
+  // Run the catch-up scan in the background without blocking the popup.
+  // Scanning ~150 emails can take a couple of minutes.
+  runCatchUpScan(token, { flagLabelId, bulkLabelId }).catch((err) =>
+    console.error("PhishCatch catch-up scan failed:", err.message)
+  );
 
   return { connected: true };
 }
@@ -114,7 +169,7 @@ async function disconnect() {
     const token = await self.PhishCatchGmail.getAuthToken(false);
     if (token) await self.PhishCatchGmail.removeCachedToken(token);
   } catch {
-    // Not fatal — we're disconnecting anyway.
+    // Not fatal, we're disconnecting anyway.
   }
   chrome.alarms.clear(POLL_ALARM_NAME);
   await chrome.storage.local.set({ gmailConnected: false });
@@ -134,6 +189,7 @@ async function getStatus() {
     "gmailConnected",
     "lastScanAt",
     "monitorFlaggedCount",
+    "monitorBulkCount",
     "catchUpInProgress",
     "catchUpProgress",
   ]);
@@ -141,12 +197,13 @@ async function getStatus() {
     connected: !!stored.gmailConnected,
     lastScanAt: stored.lastScanAt || null,
     flaggedCount: stored.monitorFlaggedCount || 0,
+    bulkCount: stored.monitorBulkCount || 0,
     catchUpInProgress: !!stored.catchUpInProgress,
     catchUpProgress: stored.catchUpProgress || null,
   };
 }
 
-async function runCatchUpScan(token, labelId) {
+async function runCatchUpScan(token, labels) {
   await chrome.storage.local.set({
     catchUpInProgress: true,
     catchUpProgress: { scanned: 0, total: CATCHUP_MAX_MESSAGES },
@@ -168,7 +225,7 @@ async function runCatchUpScan(token, labelId) {
       for (const id of ids) {
         if (processed >= CATCHUP_MAX_MESSAGES) break;
         if (!scannedIds.has(id)) {
-          await processMessage(token, labelId, id, scannedIds);
+          await processMessage(token, labels, id, scannedIds);
           await saveScannedIds(scannedIds);
           await sleep(THROTTLE_MS);
         }
@@ -184,10 +241,10 @@ async function runCatchUpScan(token, labelId) {
   }
 }
 
-/** Runs on a chrome.alarms schedule — checks for and scans new inbox mail. */
+/** Runs on a chrome.alarms schedule; checks for and scans new inbox mail. */
 async function runPollCycle() {
-  const { gmailConnected, flagLabelId } = await chrome.storage.local.get(["gmailConnected", "flagLabelId"]);
-  if (!gmailConnected) return;
+  const stored = await chrome.storage.local.get(["gmailConnected", "flagLabelId", "bulkLabelId"]);
+  if (!stored.gmailConnected) return;
 
   let token;
   try {
@@ -197,14 +254,16 @@ async function runPollCycle() {
     return;
   }
 
-  const labelId = flagLabelId || (await self.PhishCatchGmail.ensureFlagLabel(token));
+  const flagLabelId = stored.flagLabelId || (await self.PhishCatchGmail.ensureFlagLabel(token));
+  const bulkLabelId = stored.bulkLabelId || (await self.PhishCatchGmail.ensureBulkLabel(token));
+  if (!stored.bulkLabelId) await chrome.storage.local.set({ bulkLabelId });
   const scannedIds = await getScannedIds();
 
   const { ids } = await self.PhishCatchGmail.listInboxMessageIds(token, { maxResults: POLL_BATCH_SIZE });
   const newIds = ids.filter((id) => !scannedIds.has(id));
 
   for (const id of newIds) {
-    await processMessage(token, labelId, id, scannedIds);
+    await processMessage(token, { flagLabelId, bulkLabelId }, id, scannedIds);
     await saveScannedIds(scannedIds);
     await sleep(THROTTLE_MS);
   }

@@ -4,12 +4,14 @@
 //   - heuristics.js: 100% local, rule-based phishing scoring engine (no
 //     network calls, no API costs, works offline)
 //   - gmail.js:      Gmail API client (auth, labels, message read/modify)
+//   - bulk.js:       local bulk/promotional mail classifier (declutter, not
+//     security), independent of the phishing scorer
 //   - monitor.js:    autonomous inbox scanning engine (chrome.alarms driven)
 //
 // Manual scans (from the popup's "Scan Current Email" button or the Gmail
 // content script) run the exact same local analysis as the autonomous
-// monitor — there is no backend dependency for scanning at all.
-importScripts("heuristics.js", "gmail.js", "monitor.js");
+// monitor. There is no backend dependency for scanning at all.
+importScripts("heuristics.js", "gmail.js", "bulk.js", "monitor.js");
 
 const MAX_HISTORY = 50;
 
@@ -20,7 +22,7 @@ async function addToHistory(entry) {
     history.unshift(entry);
     await chrome.storage.local.set({ scanHistory: history.slice(0, MAX_HISTORY) });
   } catch {
-    // Non-fatal — the caller still has the analysis result.
+    // Non-fatal, the caller still has the analysis result.
   }
 }
 self.PhishCatchHistory = { addToHistory };
@@ -78,7 +80,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 // If the browser restarts or the (non-persistent) service worker wakes up
-// after having been connected previously, resume monitoring automatically —
-// no user action needed beyond the original one-time connect.
+// after having been connected previously, resume monitoring automatically.
+// No user action is needed beyond the original one-time connect.
 chrome.runtime.onStartup.addListener(() => self.PhishCatchMonitor.resumeIfConnected());
 chrome.runtime.onInstalled.addListener(() => self.PhishCatchMonitor.resumeIfConnected());

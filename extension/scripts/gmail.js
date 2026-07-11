@@ -10,6 +10,7 @@
 
 const GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 const FLAG_LABEL_NAME = "PhishCatch/Flagged";
+const BULK_LABEL_NAME = "PhishCatch/Bulk";
 
 function getAuthToken(interactive) {
   return new Promise((resolve, reject) => {
@@ -52,21 +53,31 @@ async function gmailFetch(path, token, options = {}) {
   return res.json();
 }
 
-/** Finds (or creates) the "PhishCatch/Flagged" label used to mark risky mail. */
-async function ensureFlagLabel(token) {
+/** Finds (or creates) a Gmail label by name, returning its id. */
+async function ensureLabel(token, name) {
   const { labels } = await gmailFetch("/labels", token);
-  const existing = labels?.find((l) => l.name === FLAG_LABEL_NAME);
+  const existing = labels?.find((l) => l.name === name);
   if (existing) return existing.id;
 
   const created = await gmailFetch("/labels", token, {
     method: "POST",
     body: JSON.stringify({
-      name: FLAG_LABEL_NAME,
+      name,
       labelListVisibility: "labelShow",
       messageListVisibility: "show",
     }),
   });
   return created.id;
+}
+
+/** The "PhishCatch/Flagged" label used to mark risky mail. */
+function ensureFlagLabel(token) {
+  return ensureLabel(token, FLAG_LABEL_NAME);
+}
+
+/** The "PhishCatch/Bulk" label used to declutter routine bulk/promotional mail. */
+function ensureBulkLabel(token) {
+  return ensureLabel(token, BULK_LABEL_NAME);
 }
 
 async function listInboxMessageIds(token, { maxResults = 50, pageToken } = {}) {
@@ -95,9 +106,9 @@ function decodeBase64Url(data) {
  * Walks a Gmail message payload (which can be arbitrarily nested multipart
  * MIME) to pull out plain text (preferred) or HTML body content, plus any
  * links found in the HTML. There's no DOM available in a service worker, so
- * link extraction and tag-stripping use regexes rather than a real parser —
- * fine here since the extracted text is only ever used as untrusted input
- * to the (already-sanitizing) backend API, never rendered as HTML.
+ * link extraction and tag-stripping use regexes rather than a real parser.
+ * That's fine here since the extracted text is only ever used as untrusted
+ * input to the local heuristic scoring engine, never rendered as HTML.
  */
 function extractBodyAndLinks(payload) {
   let plain = "";
@@ -147,22 +158,45 @@ async function getMessage(token, id) {
     body,
     links,
     internalDate: Number(msg.internalDate) || Date.now(),
+    // Headers the bulk/promotional classifier keys off of (see bulk.js).
+    listUnsubscribe: getHeader(headers, "List-Unsubscribe"),
+    listId: getHeader(headers, "List-Id"),
+    precedence: getHeader(headers, "Precedence"),
   };
 }
 
-async function labelMessage(token, id, labelId) {
+/** Adds and/or removes labels on a message in a single modify call. */
+async function modifyMessageLabels(token, id, { addLabelIds = [], removeLabelIds = [] } = {}) {
   await gmailFetch(`/messages/${id}/modify`, token, {
     method: "POST",
-    body: JSON.stringify({ addLabelIds: [labelId] }),
+    body: JSON.stringify({ addLabelIds, removeLabelIds }),
   });
+}
+
+function labelMessage(token, id, labelId) {
+  return modifyMessageLabels(token, id, { addLabelIds: [labelId] });
+}
+
+/**
+ * Applies `labelId` and removes the message from the inbox (archives it), so
+ * bulk/promotional clutter leaves the main inbox view but stays findable under
+ * the label. Nothing is deleted; the action is fully reversible by the user.
+ */
+function archiveWithLabel(token, id, labelId) {
+  return modifyMessageLabels(token, id, { addLabelIds: [labelId], removeLabelIds: ["INBOX"] });
 }
 
 self.PhishCatchGmail = {
   FLAG_LABEL_NAME,
+  BULK_LABEL_NAME,
   getAuthToken,
   removeCachedToken,
+  ensureLabel,
   ensureFlagLabel,
+  ensureBulkLabel,
   listInboxMessageIds,
   getMessage,
   labelMessage,
+  modifyMessageLabels,
+  archiveWithLabel,
 };
